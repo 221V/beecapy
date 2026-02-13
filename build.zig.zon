@@ -1,0 +1,27 @@
+.{
+  .name = .beecapy,
+  .fingerprint = 0xeeceadf2a845c1ae,
+  .version = "0.1.0",
+  .minimum_zig_version = "0.14.1",
+  .dependencies = .{
+    .zzz = .{
+      .url = "git+https://github.com/221V/zzz?ref=zig-0.14#a7e29050e6dce696f228e72dfb0425481ce38359",
+      .hash = "zzz-0.3.0-4HoaJr3sAgDxTNi1ectuUz0kLuyKcWVVSTLdiHRZKzqh",
+    },
+    //.capy = .{
+      //.path = "src/capy",
+    //  .url = "git+https://github.com/capy-ui/capy?ref=master#fd77077e296a969ae258c595e75a0723183b3138",
+    //  .hash = "capy-0.4.1-kru7R1I2ZQRJqf62-3yxDDR7_Nx3swNCHcTGNGi-FH-W",
+    //},
+  },
+  
+  .paths = .{
+    "README.md",
+    //"LICENSE",
+    "build.zig",
+    "build.zig.zon",
+    "src",
+    //"../",
+  },
+}
+

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Beecapy 🐝 for backups 🍯</title>
+</head>
+<body>
+<h1>Beecapy WS</h1>
+<script>
+const ws = new WebSocket("ws://localhost:3010/ws"); // same PORT
+ws.onmessage = (e) => console.log("ws <- ", e.data);
+ws.onopen = () => ws.send("Hello from browser!");
+ws.onclose = (e) => console.log("ws closed", e);
+</script>
+</body>
+</html>
