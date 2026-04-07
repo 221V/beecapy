@@ -1,16 +1,50 @@
 <!DOCTYPE html>
 <html>
 <head>
+<link type="image/x-icon" rel="shortcut icon" href="/favicon.ico">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta charset="UTF-8">
 <title>Beecapy 🐝 for backups 🍯</title>
+<link rel="stylesheet" href="/pure-min.css">
+<link rel="stylesheet" href="/grids-responsive-min.css">
+<link rel="stylesheet" href="/main.css">
 </head>
-<body>
-<h1>Beecapy WS</h1>
-<script>
-const ws = new WebSocket("ws://localhost:3010/ws"); // same PORT
-ws.onmessage = (e) => console.log("ws <- ", e.data);
-ws.onopen = () => ws.send("Hello from browser!");
-ws.onclose = (e) => console.log("ws closed", e);
-</script>
+<body class="pure-g">
+
+<h1 class="pure-u-1-1">Beecapy WS — Beecapy 🐝 for backups 🍯</h1>
+
+<span id="ws_status_ok">✅ WS OK</span>
+<span id="ws_status_err">❌ WS ERROR</span>
+
+<!-- Left -->
+<div class="pure-u-1-2">
+  <label><span>Working directory<br>(e.g. on Laptop/PC)</span><br>
+  <textarea id="folder_left" rows="2" wrap="off" placeholder="/home/user/dir1"></textarea></label><br><br>
+  <button id="show_ignore_dirs_left" class="pure-button pure-button-primary" onclick="show_ignore_dirs_left();">add Ignore dir(s)</button>
+  <button id="hide_ignore_dirs_left" class="pure-button pure-button-primary" onclick="hide_ignore_dirs_left();">Hide Ignore dir(s)</button><br><br>
+  <label id="label_ignore_dirs_left"><span>Ignore directory(ies), one per line<br>(e.g. on Laptop/PC)</span><br>
+  <textarea id="folder_ignore_left" rows="5" wrap="off" placeholder="/home/user/dir1/abc"></textarea></label><br>
+</div>
+
+<!-- Right -->
+<div class="pure-u-1-2">
+  <label><span>Backup directory<br>(e.g. external hard drive)</span><br>
+  <textarea id="folder_right" rows="2" wrap="off" placeholder="/home/user/dir2"></textarea></label><br><br>
+  <button id="show_ignore_dirs_right" class="pure-button pure-button-primary" onclick="show_ignore_dirs_right();">add Ignore dir(s)</button>
+  <button id="hide_ignore_dirs_right" class="pure-button pure-button-primary" onclick="hide_ignore_dirs_right();">Hide Ignore dir(s)</button><br><br>
+  <label id="label_ignore_dirs_right"><span>Ignore directory(ies), one per line<br>(e.g. external hard drive)</span><br>
+  <textarea id="folder_ignore_right" rows="5" wrap="off" placeholder="/home/user/dir2/abc"></textarea></label><br>
+</div>
+
+<!-- Center -->
+<div class="btm_center pure-u-1-1">
+  <span>Center</span>
+</div>
+
+<!-- <script src="/BigInteger.min.js" defer></script> --> <!-- no needs this in this program, but let it be -->
+<!-- <script src="/ieee754.js" defer></script> -->
+<script src="/bert.js" defer></script>
+<script src="/main.js" defer></script>
+
 </body>
 </html>

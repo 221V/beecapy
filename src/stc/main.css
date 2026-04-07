@@ -1,0 +1,64 @@
+html, body{margin:0;padding:0}
+
+/* buttons */
+.button-xsmall{
+  font-size: 70%;
+}
+.button-small{
+  font-size: 85%;
+}
+.button-large{
+  font-size: 110%;
+}
+.button-xlarge{
+  font-size: 125%;
+}
+
+.button-success,
+.button-error,
+.button-warning,
+.button-secondary{
+  color: white;
+  border-radius: 4px;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+.button-success{
+  background: rgb(28, 184, 65); /* this is a green */
+}
+.button-error{
+  background: rgb(202, 60, 60); /* this is a maroon */
+}
+.button-warning{
+  background: rgb(223, 117, 20); /* this is an orange */
+}
+.button-secondary{
+  background: rgb(66, 184, 221); /* this is a light blue */
+}
+
+
+body{text-align:center}
+body > h1{padding-left:30px;margin:5px}
+
+#ws_status_ok,
+#ws_status_err{display:none;position:absolute;top:1px;left:1px}
+
+.btm_center{margin-top:10px}
+label{cursor:pointer}
+
+#folder_left,
+#folder_right,
+#folder_ignore_left,
+#folder_ignore_right{width:95%}
+
+#show_ignore_dirs_left,
+#show_ignore_dirs_right{margin:5px}
+
+#label_ignore_dirs_left,
+#label_ignore_dirs_right{width:100%}
+
+#hide_ignore_dirs_left,
+#hide_ignore_dirs_right,
+#label_ignore_dirs_left,
+#label_ignore_dirs_right{display:none}
+
+
