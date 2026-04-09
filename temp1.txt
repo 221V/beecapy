@@ -1,0 +1,24 @@
+
+todo version with html page as GUI  
+todo version with GUI and/or TUI  
+  
+.  
+  
+```
+// uses zzz with tardy for serve html page as GUI ( todo v2 with Capy GUI )  
+zig 0.14.1
+
+# build
+$ zig build
+
+# just test file CLI, without http server
+$ zig build-exe ./src/test.zig -O ReleaseFast -femit-bin=test
+
+todo
+https://github.com/221V/zzz/tree/zig-0.14
+https://github.com/221V/tardy/tree/zig-0.14
+https://github.com/221V/secsock/tree/zig-0.14
+
+todo with https://github.com/capy-ui/capy
+https://github.com/capy-ui/capy/commit/fd77077e296a969ae258c595e75a0723183b3138   Dec 25, 2025
+```

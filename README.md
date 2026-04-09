@@ -2,20 +2,18 @@
 program for semi-manual & semi-automatic backups on linux  
 tested on (l)ubuntu 22.04 LTS x86_64  
 
-uses zzz with tardy for serve html page as GUI ( todo v2 with Capy GUI )  
 ```
 zig 0.14.1
 
-# build
-$ zig build
+# build - CLI version as MVP
+zig build-exe ./src/test.zig -O ReleaseFast -femit-bin=beecapy
 
-
-
-https://github.com/221V/zzz/tree/zig-0.14
-https://github.com/221V/tardy/tree/zig-0.14
-https://github.com/221V/secsock/tree/zig-0.14
-
-
-todo with https://github.com/capy-ui/capy
-https://github.com/capy-ui/capy/commit/fd77077e296a969ae258c595e75a0723183b3138   Dec 25, 2025
+# usage commands
+Sync (from Laptop or PC to Backup):                  ./beecapy <LAPTOP_DIR> <BACKUP_DIR>
+Sync (from Backup to Backup):                        ./beecapy <BACKUP_1_DIR> <BACKUP_2_DIR> backup2backup
+Find (try to find same file in dir and its subdirs): ./beecapy <DIR> find_doubles
 ```
+
+todo version with html page as GUI  
+todo version with GUI and/or TUI  
+
