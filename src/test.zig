@@ -11,6 +11,7 @@ const ArrayList = std.ArrayList;
 
 const same_files_txt    = "backup_same_files.txt";
 const copied_files_txt  = "backups_copied_files.txt";
+const copied_files_b2_to_b1_txt  = "backups_copied_files_b2_to_b1.txt";
 const renamed_files_txt = "backups_renamed_files.txt";
 
 
@@ -90,7 +91,7 @@ fn scan_dir(allocator: Allocator, base_path: []const u8, sub_path: []const u8, l
 }
 
 
-fn mode_sync(allocator: Allocator, src_path: []const u8, dst_path: []const u8, is_backup2backup: bool) !void {
+fn mode_sync(allocator: Allocator, src_path: []const u8, dst_path: []const u8, is_backup2backup: bool, is_nocopy: bool) !void {
   var src_files = ArrayList(FileEntry).init(allocator);
   var dst_files = ArrayList(FileEntry).init(allocator);
   
@@ -103,6 +104,9 @@ fn mode_sync(allocator: Allocator, src_path: []const u8, dst_path: []const u8, i
   
   const log_rename = try fs.cwd().createFile(renamed_files_txt, .{});
   defer log_rename.close();
+  
+  const log_b2b_back = if (is_backup2backup) try fs.cwd().createFile(copied_files_b2_to_b1_txt, .{}) else null;
+  defer if (log_b2b_back) |l| l.close();
   
   var copied_count: usize = 0;
   var renamed_count: usize = 0;
@@ -143,24 +147,28 @@ fn mode_sync(allocator: Allocator, src_path: []const u8, dst_path: []const u8, i
       else
         try fs.path.join(allocator, &[_][]const u8{ old_dir, new_name });
       
-      const old_full = try fs.path.join(allocator, &[_][]const u8{ dst_path, old_rel });
-      const new_full = try fs.path.join(allocator, &[_][]const u8{ dst_path, new_rel });
-      
-      try fs.renameAbsolute(old_full, new_full);
+      if(!is_nocopy){
+        const old_full = try fs.path.join(allocator, &[_][]const u8{ dst_path, old_rel });
+        const new_full = try fs.path.join(allocator, &[_][]const u8{ dst_path, new_rel });
+        
+        try fs.renameAbsolute(old_full, new_full);
+      }
       try log_rename.writer().print("{s} -> {s}\n", .{ old_rel, new_rel });
       renamed_count += 1;
     
     }else{ // lets copy file file to backup -- new file or same file name but file was changed
-      const final_dst = try fs.path.join(allocator, &[_][]const u8{ dst_path, src_file.rel_path });
-      if(fs.path.dirname(final_dst)) |d| try fs.cwd().makePath(d);
-      try fs.cwd().copyFile(full_src, fs.cwd(), final_dst, .{});
+      if(!is_nocopy){
+        const final_dst = try fs.path.join(allocator, &[_][]const u8{ dst_path, src_file.rel_path });
+        if(fs.path.dirname(final_dst)) |d| try fs.cwd().makePath(d);
+        try fs.cwd().copyFile(full_src, fs.cwd(), final_dst, .{});
+      }
       try log_copy.writer().print("{s}\n", .{src_file.rel_path});
       copied_count += 1;
     }
   }
   
-  const mode_label = if(is_backup2backup) "Backup2Backup (B1 -> B2)" else "Laptop2Backup";
-  print("{s}: Copied {d}, Renamed {d}\n", .{ mode_label, copied_count, renamed_count });
+  const mode_label = if(is_nocopy) "NOCOPY Backup2Backup (B1 -> B2)" else if(is_backup2backup) "Backup2Backup (B1 -> B2)" else "Laptop2Backup";
+  print("{s}: Logged Copied {d}, Logged Renamed {d}\n", .{ mode_label, copied_count, renamed_count });
   
   
   if(is_backup2backup){ // backup2backup (B2 -> B1) -- part 2, copy files for get same backups, with same files
@@ -181,14 +189,18 @@ fn mode_sync(allocator: Allocator, src_path: []const u8, dst_path: []const u8, i
       }
       
       if(!exists_in_b1){
-        const f_src = try fs.path.join(allocator, &[_][]const u8{ dst_path, d_file.rel_path });
-        const f_dst = try fs.path.join(allocator, &[_][]const u8{ src_path, d_file.rel_path });
-        if(fs.path.dirname(f_dst)) |d| try fs.cwd().makePath(d);
-        try fs.cwd().copyFile(f_src, fs.cwd(), f_dst, .{});
+        if(!is_nocopy){
+          const f_src = try fs.path.join(allocator, &[_][]const u8{ dst_path, d_file.rel_path });
+          const f_dst = try fs.path.join(allocator, &[_][]const u8{ src_path, d_file.rel_path });
+          if(fs.path.dirname(f_dst)) |d| try fs.cwd().makePath(d);
+          try fs.cwd().copyFile(f_src, fs.cwd(), f_dst, .{});
+        }
+        if(log_b2b_back) |l| try l.writer().print("{s}\n", .{d_file.rel_path});
         b2_to_b1_count += 1;
       }
     }
-    print("Backup2Backup (B2 -> B1): Copied {d} files\n", .{ b2_to_b1_count });
+    const mode_label2 = if(is_nocopy) "NOCOPY Backup2Backup (B2 -> B1)" else "Backup2Backup (B2 -> B1)";
+    print("{s}: Logged Copied {d} files\n", .{ mode_label2, b2_to_b1_count });
   }
 }
 
@@ -255,13 +267,16 @@ pub fn main() !void {
     try mode_find_duplicates(allocator, args[1]);
   
   }else if(args.len == 3){ // laptop2backup
-    try mode_sync(allocator, args[1], args[2], false);
+    try mode_sync(allocator, args[1], args[2], false, false);
   
   }else if(args.len == 4 and std.mem.eql(u8, args[3], "backup2backup")){ // backup2backup
-    try mode_sync(allocator, args[1], args[2], true);
+    try mode_sync(allocator, args[1], args[2], true, false);
+  
+  }else if(args.len == 4 and std.mem.eql(u8, args[3], "nocopy")){ // nocopy backup2backup
+    try mode_sync(allocator, args[1], args[2], true, true);
   
   }else{
-    print("Usage:\n  Sync:          ./beecapy <LAPTOP_DIR> <BACKUP_DIR>\n  Find:          ./beecapy <DIR> find_doubles\n  Backup2Backup: ./beecapy <BACKUP_1_DIR> <BACKUP_2_DIR> backup2backup\n", .{});
+    print("Usage:\n  Sync:\n    ./beecapy <LAPTOP_DIR> <BACKUP_DIR>\n  Find:\n    ./beecapy <DIR> find_doubles\n  Backup2Backup:\n    ./beecapy <BACKUP_1_DIR> <BACKUP_2_DIR> backup2backup\n  NoCopy Backup2Backup:\n    ./beecapy <BACKUP_1_DIR> <BACKUP_2_DIR> nocopy\n", .{});
     return;
   }
 }
