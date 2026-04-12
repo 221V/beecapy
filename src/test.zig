@@ -205,7 +205,7 @@ fn mode_sync(allocator: Allocator, src_path: []const u8, dst_path: []const u8, i
 }
 
 
-fn mode_find_duplicates(allocator: Allocator, target_path: []const u8) !void {
+fn mode_find_duplicates(allocator: Allocator, target_path: []const u8, filter_files_exts: []const u8) !void {
   var files = ArrayList(FileEntry).init(allocator);
   print("Scanning directories...\n", .{});
   try scan_dir(allocator, target_path, "", &files);
@@ -213,8 +213,32 @@ fn mode_find_duplicates(allocator: Allocator, target_path: []const u8) !void {
   const log_doubles = try fs.cwd().createFile(same_files_txt, .{});
   defer log_doubles.close();
   
+  const is_any = std.mem.eql(u8, filter_files_exts, "any");
+  var allowed_exts = ArrayList([]const u8).init(allocator);
+  if(!is_any){
+    var it = std.mem.tokenizeAny(u8, filter_files_exts, ", ");
+    while(it.next()) |ext|{
+      const clean_ext = if(ext.len > 0 and ext[0] == '.') ext[1..] else ext; // del . if exists
+      try allowed_exts.append(clean_ext);
+    }
+  }
+  
   var size_map = std.AutoHashMap(u64, ArrayList(*FileEntry)).init(allocator); // group files by size for optimization
   for(files.items) |*f|{
+    if(!is_any){
+      const file_ext = fs.path.extension(f.rel_path);
+      const clean_file_ext = if(file_ext.len > 0 and file_ext[0] == '.') file_ext[1..] else file_ext;
+      
+      var found = false;
+      for(allowed_exts.items) |ext|{
+        if(std.ascii.eqlIgnoreCase(clean_file_ext, ext)){
+          found = true;
+          break;
+        }
+      }
+      if(!found) continue;
+    }
+    
     var res = try size_map.getOrPut(f.size);
     if (!res.found_existing) res.value_ptr.* = ArrayList(*FileEntry).init(allocator);
     try res.value_ptr.append(f);
@@ -263,8 +287,10 @@ pub fn main() !void {
   const allocator = arena.allocator();
   
   const args = try std.process.argsAlloc(allocator);
-  if(args.len == 3 and std.mem.eql(u8, args[2], "find_doubles")){ // find doubles in dir, subdirs included
-    try mode_find_duplicates(allocator, args[1]);
+  
+  if(args.len >= 3 and std.mem.eql(u8, args[2], "find_doubles")){ // find doubles in dir, subdirs included, last arg = files_extension(s) = any | "ext1, ext2, ext3, etc"
+    const filter_files_exts = if(args.len == 4) args[3] else "any";
+    try mode_find_duplicates(allocator, args[1], filter_files_exts);
   
   }else if(args.len == 3){ // laptop2backup
     try mode_sync(allocator, args[1], args[2], false, false);
@@ -276,7 +302,16 @@ pub fn main() !void {
     try mode_sync(allocator, args[1], args[2], true, true);
   
   }else{
-    print("Usage:\n  Sync:\n    ./beecapy <LAPTOP_DIR> <BACKUP_DIR>\n  Find:\n    ./beecapy <DIR> find_doubles\n  Backup2Backup:\n    ./beecapy <BACKUP_1_DIR> <BACKUP_2_DIR> backup2backup\n  NoCopy Backup2Backup:\n    ./beecapy <BACKUP_1_DIR> <BACKUP_2_DIR> nocopy\n", .{});
+    print("Usage:\n" ++
+      "  Sync:\n" ++
+      "    ./beecapy <LAPTOP_DIR> <BACKUP_DIR>\n" ++
+      "  Find:\n" ++
+      "    ./beecapy <DIR> find_doubles any\n" ++
+      "    ./beecapy <DIR> find_doubles \"pdf, djvu, doc\"\n" ++
+      "  Backup2Backup:\n" ++
+      "    ./beecapy <BACKUP_1_DIR> <BACKUP_2_DIR> backup2backup\n" ++
+      "  NoCopy Backup2Backup:\n" ++
+      "    ./beecapy <BACKUP_1_DIR> <BACKUP_2_DIR> nocopy\n", .{});
     return;
   }
 }
