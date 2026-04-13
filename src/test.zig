@@ -39,6 +39,13 @@ const FileEntry = struct {
   hash: ?HashResult = null,
 };
 
+const MultiFileEntry = struct {
+  base_path: []const u8,
+  rel_path: []const u8,
+  size: u64,
+  hash: ?HashResult = null,
+};
+
 
 fn compute_hashes(absolute_path: []const u8) !HashResult {
   const file = try fs.cwd().openFile(absolute_path, .{});
@@ -281,6 +288,78 @@ fn mode_find_duplicates(allocator: Allocator, target_path: []const u8, filter_fi
 }
 
 
+fn mode_find_duplicates_multi(allocator: Allocator, target_paths: ArrayList([]const u8), filter_files_exts: []const u8) !void {
+  var all_multi_files = ArrayList(MultiFileEntry).init(allocator);
+  print("Scanning multiple directories...\n", .{});
+  
+  for(target_paths.items) |path|{
+    var temp_list = ArrayList(FileEntry).init(allocator);
+    try scan_dir(allocator, path, "", &temp_list);
+    for(temp_list.items) |fe|{
+      try all_multi_files.append(.{ .base_path = path, .rel_path = fe.rel_path, .size = fe.size });
+    }
+  }
+  
+  const log_doubles = try fs.cwd().createFile(same_files_txt, .{});
+  defer log_doubles.close();
+  
+  const is_any = std.mem.eql(u8, filter_files_exts, "any");
+  var size_map = std.AutoHashMap(u64, ArrayList(*MultiFileEntry)).init(allocator);
+  
+  for(all_multi_files.items) |*f|{
+    if(!is_any){
+      const file_ext = fs.path.extension(f.rel_path);
+      const clean_file_ext = if(file_ext.len > 0 and file_ext[0] == '.') file_ext[1..] else file_ext;
+      var found = false;
+      var it = std.mem.tokenizeAny(u8, filter_files_exts, ", ");
+      
+      while(it.next()) |ext|{
+        if(std.ascii.eqlIgnoreCase(clean_file_ext, if(ext[0] == '.') ext[1..] else ext)){ found = true; break; }
+      }
+      if(!found) continue;
+    }
+    
+    var res = try size_map.getOrPut(f.size);
+    if (!res.found_existing) res.value_ptr.* = ArrayList(*MultiFileEntry).init(allocator);
+    try res.value_ptr.append(f);
+  }
+  
+  var iter = size_map.iterator();
+  
+  while(iter.next()) |entry|{
+    const list = entry.value_ptr;
+    if(list.items.len < 2) continue;
+    
+    for(list.items) |f|{
+      const full = try fs.path.join(allocator, &[_][]const u8{ f.base_path, f.rel_path });
+      f.hash = try compute_hashes(full);
+    }
+    var skip = try allocator.alloc(bool, list.items.len);
+    @memset(skip, false);
+    
+    for(list.items, 0..) |f1, i|{
+      if(skip[i]) continue;
+      var group = ArrayList([]const u8).init(allocator);
+      const full1 = try fs.path.join(allocator, &[_][]const u8{ f1.base_path, f1.rel_path });
+      try group.append(full1);
+      for(list.items[i + 1 ..], 0..) |f2, j|{
+        if(f1.hash.?.eql(f2.hash.?)){
+          const full2 = try fs.path.join(allocator, &[_][]const u8{ f2.base_path, f2.rel_path });
+          try group.append(full2);
+          skip[i + 1 + j] = true;
+        }
+      }
+      
+      if(group.items.len > 1){
+        for(group.items, 0..) |path, k| try log_doubles.writer().print("{s}{s}", .{ path, if(k == group.items.len - 1) "" else ", " });
+        try log_doubles.writer().print("\n", .{});
+      }
+    }
+  }
+  print("Multi-folder duplicates analysis finished. Check {s}\n", .{ same_files_txt });
+}
+
+
 pub fn main() !void {
   var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
   defer arena.deinit();
@@ -288,9 +367,17 @@ pub fn main() !void {
   
   const args = try std.process.argsAlloc(allocator);
   
-  if(args.len >= 3 and std.mem.eql(u8, args[2], "find_doubles")){ // find doubles in dir, subdirs included, last arg = files_extension(s) = any | "ext1, ext2, ext3, etc"
+  if(args.len >= 3 and std.mem.eql(u8, args[2], "find_doubles")){ // find doubles in dir (or list of dirs) subdirs included, last arg = files_extension(s) = any | "ext1, ext2, ext3, etc"
     const filter_files_exts = if(args.len == 4) args[3] else "any";
-    try mode_find_duplicates(allocator, args[1], filter_files_exts);
+    
+    if (args[1].len > 0 and args[1][0] == '[') {
+      var target_paths = ArrayList([]const u8).init(allocator);
+      var it = std.mem.tokenizeAny(u8, args[1], "[]\", ");
+      while(it.next()) |p| try target_paths.append(p);
+      try mode_find_duplicates_multi(allocator, target_paths, filter_files_exts);
+    } else {
+      try mode_find_duplicates(allocator, args[1], filter_files_exts);
+    }
   
   }else if(args.len == 3){ // laptop2backup
     try mode_sync(allocator, args[1], args[2], false, false);
@@ -308,6 +395,7 @@ pub fn main() !void {
       "  Find:\n" ++
       "    ./beecapy <DIR> find_doubles any\n" ++
       "    ./beecapy <DIR> find_doubles \"pdf, djvu, doc\"\n" ++
+      "    ./beecapy \"[\\\"/home/u/Documents/books\\\", \\\"/home/u/Downloads\\\", \\\"/media/diskX\\\", \\\"/home/u/сміттячко\\\"]\" find_doubles \"pdf, djvu, doc, epub\"\n" ++
       "  Backup2Backup:\n" ++
       "    ./beecapy <BACKUP_1_DIR> <BACKUP_2_DIR> backup2backup\n" ++
       "  NoCopy Backup2Backup:\n" ++

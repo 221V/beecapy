@@ -18,10 +18,10 @@ Sync - copy (from Backup to Backup):
 NoCopy - diff log only (from Backup to Backup):
   ./beecapy <BACKUP_1_DIR> <BACKUP_2_DIR> nocopy
 
-Find - log only (try to find same file in dir and its subdirs, last arg = file extension):
+Find - log only (try to find same file in dir [or few dirs] and its subdirs [cyrillic and whitespaces in paths are supported], last arg = file extension):
   ./beecapy <DIR> find_doubles any
   ./beecapy <DIR> find_doubles "pdf, djvu, doc"
-
+  ./beecapy "[\"/home/u/Documents/books\", \"/home/u/Downloads\", \"/media/diskX\", \"/home/u/сміттячко\"]" find_doubles "pdf, djvu, doc, epub"
 
 # logs about
 backup_same_files.txt -- same files log for find_doubles mode
