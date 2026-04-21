@@ -14,6 +14,7 @@ const copied_files_txt  = "backups_copied_files.txt";
 const copied_files_b2_to_b1_txt  = "backups_copied_files_b2_to_b1.txt";
 const renamed_files_txt = "backups_renamed_files.txt";
 
+const rename_only_exts = "pdf, djvu, doc, epub, mp3, mp4, zip, rar, fb2, rtf"; // do not compare and rename/mv multiple tiny files like css-js-gifs from folders-that-required-with-saved_web_pages
 
 const HashResult = struct {
   sha256: [32]u8,
@@ -48,7 +49,10 @@ const MultiFileEntry = struct {
 
 
 fn compute_hashes(absolute_path: []const u8) !HashResult {
-  const file = try fs.cwd().openFile(absolute_path, .{});
+  const file = fs.cwd().openFile(absolute_path, .{}) catch |err| {
+    print("Error opening file for hashing: {s}\nPath: {s}\n", .{ @errorName(err), absolute_path });
+    return err;
+  };
   defer file.close();
   
   var sha = crypto.hash.sha2.Sha256.init(.{});
@@ -106,6 +110,12 @@ fn mode_sync(allocator: Allocator, src_path: []const u8, dst_path: []const u8, i
   try scan_dir(allocator, src_path, "", &src_files);
   try scan_dir(allocator, dst_path, "", &dst_files);
   
+  var dst_map = std.StringHashMap(*FileEntry).init(allocator);
+  for(dst_files.items) |*f| try dst_map.put(f.rel_path, f);
+  
+  var src_map = std.StringHashMap(void).init(allocator);
+  for(src_files.items) |f| try src_map.put(f.rel_path, {});
+  
   const log_copy = try fs.cwd().createFile(copied_files_txt, .{});
   defer log_copy.close();
   
@@ -120,25 +130,51 @@ fn mode_sync(allocator: Allocator, src_path: []const u8, dst_path: []const u8, i
   
   for(src_files.items) |*src_file|{  // sync - laptop2backup or backup2backup (B1 -> B2)
     const full_src = try fs.path.join(allocator, &[_][]const u8{ src_path, src_file.rel_path });
-    src_file.hash = try compute_hashes(full_src);
+    src_file.hash = compute_hashes(full_src) catch |err|{
+      if(err == error.FileNotFound){
+        print("Warning: File disappeared during scan: {s}\n", .{ full_src });
+        continue; // so skip this file
+      }
+      return err;
+    };
     
     var action_needed = true;
     var found_duplicate_content: ?[]const u8 = null;
     
-    for(dst_files.items) |*dst_file|{
-      if(std.mem.eql(u8, src_file.rel_path, dst_file.rel_path) and src_file.size == dst_file.size){ // if same (sub)path and same size
+    if(dst_map.get(src_file.rel_path)) |dst_file|{
+      if(src_file.size == dst_file.size){ // if we have the same file path in backup and same size
         const full_dst = try fs.path.join(allocator, &[_][]const u8{ dst_path, dst_file.rel_path });
         dst_file.hash = compute_hashes(full_dst) catch continue;
-        if(src_file.hash.?.eql(dst_file.hash.?)){
+        
+        if(src_file.hash.?.eql(dst_file.hash.?)){ // and same hash
           action_needed = false; // same files, so do nothing
-          break;
         }
       }
-      if(src_file.size == dst_file.size and found_duplicate_content == null){ // if other (sub)path and same file -- needs to rename
-        const full_dst_check = try fs.path.join(allocator, &[_][]const u8{ dst_path, dst_file.rel_path });
-        if(dst_file.hash == null) dst_file.hash = compute_hashes(full_dst_check) catch continue;
-        if(src_file.hash.?.eql(dst_file.hash.?)){
-          found_duplicate_content = dst_file.rel_path;
+    }
+    
+    if(action_needed){ // not same file - so try to search doublings for rename file
+      const file_ext = fs.path.extension(src_file.rel_path);
+      const is_allowed_rename = blk: {
+        if(file_ext.len == 0) break :blk false;
+        const clean_ext = if(file_ext[0] == '.') file_ext[1..] else file_ext;
+        var it = std.mem.tokenizeAny(u8, rename_only_exts, ", ");
+        while (it.next()) |ext| if(std.ascii.eqlIgnoreCase(clean_ext, ext)) break :blk true;
+        break :blk false;
+      };
+      
+      if(is_allowed_rename){ // needs to rename - only if allowed file extension
+        for(dst_files.items) |*dst_file|{
+          if(src_file.size == dst_file.size){
+            if(src_map.contains(dst_file.rel_path)) continue;
+            
+            const full_dst_check = try fs.path.join(allocator, &[_][]const u8{ dst_path, dst_file.rel_path });
+            if(dst_file.hash == null) dst_file.hash = compute_hashes(full_dst_check) catch continue;
+            
+            if(src_file.hash.?.eql(dst_file.hash.?)){
+              found_duplicate_content = dst_file.rel_path;
+              break;
+            }
+          }
         }
       }
     }
@@ -146,22 +182,18 @@ fn mode_sync(allocator: Allocator, src_path: []const u8, dst_path: []const u8, i
     if(!action_needed) continue;
     
     if(found_duplicate_content) |old_rel|{ // lets rename file in backup
-      const old_dir = fs.path.dirname(old_rel) orelse "";
-      const new_name = fs.path.basename(src_file.rel_path);
-      
-      const new_rel = if(old_dir.len == 0)
-        try allocator.dupe(u8, new_name)
-      else
-        try fs.path.join(allocator, &[_][]const u8{ old_dir, new_name });
+      if(std.mem.eql(u8, old_rel, src_file.rel_path)) continue;
       
       if(!is_nocopy){
         const old_full = try fs.path.join(allocator, &[_][]const u8{ dst_path, old_rel });
-        const new_full = try fs.path.join(allocator, &[_][]const u8{ dst_path, new_rel });
+        const new_full = try fs.path.join(allocator, &[_][]const u8{ dst_path, src_file.rel_path });
         
+        if(fs.path.dirname(new_full)) |d| try fs.cwd().makePath(d);
         try fs.renameAbsolute(old_full, new_full);
       }
-      try log_rename.writer().print("{s} -> {s}\n", .{ old_rel, new_rel });
+      try log_rename.writer().print("{s} -> {s}\n", .{ old_rel, src_file.rel_path });
       renamed_count += 1;
+      _ = dst_map.remove(old_rel);
     
     }else{ // lets copy file file to backup -- new file or same file name but file was changed
       if(!is_nocopy){
@@ -366,6 +398,8 @@ pub fn main() !void {
   const allocator = arena.allocator();
   
   const args = try std.process.argsAlloc(allocator);
+  fs.cwd().access(args[1], .{}) catch { print("Source directory not found: {s}\n", .{ args[1] }); return; };
+  if(!std.mem.eql(u8, args[2], "find_doubles")){ fs.cwd().access(args[2], .{}) catch { print("Destination directory not found: {s}\n", .{args[2]}); return; }; }
   
   if(args.len >= 3 and std.mem.eql(u8, args[2], "find_doubles")){ // find doubles in dir (or list of dirs) subdirs included, last arg = files_extension(s) = any | "ext1, ext2, ext3, etc"
     const filter_files_exts = if(args.len == 4) args[3] else "any";
