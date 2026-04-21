@@ -189,7 +189,10 @@ fn mode_sync(allocator: Allocator, src_path: []const u8, dst_path: []const u8, i
         const new_full = try fs.path.join(allocator, &[_][]const u8{ dst_path, src_file.rel_path });
         
         if(fs.path.dirname(new_full)) |d| try fs.cwd().makePath(d);
-        try fs.renameAbsolute(old_full, new_full);
+        fs.renameAbsolute(old_full, new_full) catch |err|{
+          print("RENAME ERROR: {s}\nFrom: {s}\nTo: {s}\n", .{ @errorName(err), old_full, new_full });
+          return err;
+        };
       }
       try log_rename.writer().print("{s} -> {s}\n", .{ old_rel, src_file.rel_path });
       renamed_count += 1;
@@ -199,7 +202,10 @@ fn mode_sync(allocator: Allocator, src_path: []const u8, dst_path: []const u8, i
       if(!is_nocopy){
         const final_dst = try fs.path.join(allocator, &[_][]const u8{ dst_path, src_file.rel_path });
         if(fs.path.dirname(final_dst)) |d| try fs.cwd().makePath(d);
-        try fs.cwd().copyFile(full_src, fs.cwd(), final_dst, .{});
+        fs.cwd().copyFile(full_src, fs.cwd(), final_dst, .{}) catch |err|{
+          print("COPY ERROR: {s}\nSource: {s}\nDest: {s}\n", .{ @errorName(err), full_src, final_dst });
+          return err;
+        };
       }
       try log_copy.writer().print("{s}\n", .{src_file.rel_path});
       copied_count += 1;
