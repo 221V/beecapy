@@ -32,6 +32,7 @@ backups_renamed_files.txt -- renamed files log (in backup when sync from laptop/
 
 backups_copied_files_b2_to_b1.txt -- copied files log (from backup_2 to backup_1 - second part of sync - when sync from backup_1 to backup_2)
 ```
+todo filter-replace some symbols when copy files from laptop to backup - for example, `:`  
 todo add filters (by file extension, min file size etc) for log-only modes  
 
 todo version with html page as GUI  
