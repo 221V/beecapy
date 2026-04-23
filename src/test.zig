@@ -404,8 +404,8 @@ pub fn main() !void {
   const allocator = arena.allocator();
   
   const args = try std.process.argsAlloc(allocator);
-  fs.cwd().access(args[1], .{}) catch { print("Source directory not found: {s}\n", .{ args[1] }); return; };
-  if(!std.mem.eql(u8, args[2], "find_doubles")){ fs.cwd().access(args[2], .{}) catch { print("Destination directory not found: {s}\n", .{args[2]}); return; }; }
+  if(args.len >= 2){ fs.cwd().access(args[1], .{}) catch { print("Source directory not found: {s}\n", .{ args[1] }); return; }; }
+  if(args.len >= 3 and !std.mem.eql(u8, args[2], "find_doubles")){ fs.cwd().access(args[2], .{}) catch { print("Destination directory not found: {s}\n", .{args[2]}); return; }; }
   
   if(args.len >= 3 and std.mem.eql(u8, args[2], "find_doubles")){ // find doubles in dir (or list of dirs) subdirs included, last arg = files_extension(s) = any | "ext1, ext2, ext3, etc"
     const filter_files_exts = if(args.len == 4) args[3] else "any";
