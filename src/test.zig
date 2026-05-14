@@ -16,6 +16,9 @@ const renamed_files_txt = "backups_renamed_files.txt";
 
 const rename_only_exts = "pdf, djvu, doc, epub, mp3, mp4, zip, rar, fb2, rtf"; // do not compare and rename/mv multiple tiny files like css-js-gifs from folders-that-required-with-saved_web_pages
 
+const forbidden_chars = ":*?\"<>|"; // "\\/:*?\"<>|"; // ["\\", "/", ":", "*", "?", "\"", "<", ">", "|"]; // rename file name symbols to -> "_" for avoid error on copy from PC/Laptop to Backup (external HDD)
+
+
 const HashResult = struct {
   sha256: [32]u8,
   blake2b: [32]u8,
@@ -129,6 +132,26 @@ fn mode_sync(allocator: Allocator, src_path: []const u8, dst_path: []const u8, i
   var renamed_count: usize = 0;
   
   for(src_files.items) |*src_file|{  // sync - laptop2backup or backup2backup (B1 -> B2)
+    const filename_only = fs.path.basename(src_file.rel_path);
+    var needs_rename = false;
+    for(filename_only) |c| if(std.mem.indexOfScalar(u8, forbidden_chars, c) != null){ needs_rename = true; break; };
+    
+    if(needs_rename){
+      const dir_name = fs.path.dirname(src_file.rel_path) orelse "";
+      const sanitized = try allocator.dupe(u8, filename_only);
+      for(sanitized) |*c| if(std.mem.indexOfScalar(u8, forbidden_chars, c.*) != null){ c.* = '_'; };
+      
+      const new_rel = if(dir_name.len == 0) sanitized else try fs.path.join(allocator, &[_][]const u8{ dir_name, sanitized });
+      const old_f_src = try fs.path.join(allocator, &[_][]const u8{ src_path, src_file.rel_path });
+      const new_f_src = try fs.path.join(allocator, &[_][]const u8{ src_path, new_rel });
+      
+      fs.renameAbsolute(old_f_src, new_f_src) catch |err| {
+        print("SOURCE RENAME ERROR: {s} for {s}\n", .{ @errorName(err), old_f_src });
+        return err;
+      };
+      src_file.rel_path = new_rel;
+    }
+    
     const full_src = try fs.path.join(allocator, &[_][]const u8{ src_path, src_file.rel_path });
     src_file.hash = compute_hashes(full_src) catch |err|{
       if(err == error.FileNotFound){
